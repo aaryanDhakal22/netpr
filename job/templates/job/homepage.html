@@ -9,10 +9,10 @@
     <form enctype="multipart/form-data" action="print/" method="post">
         {% csrf_token %}
         <label for="inp-title">Title : </label>
-        <input type="text" id="inp-title">
+        <input type="text" name="inp-title" id="inp-title">
         <br>
         <label for="inp-passwd">Password : </label>
-        <input type="password" id="inp-passwd">
+        <input type="password" name="password"id="inp-passwd">
         <br>
         <input type="file" name="inp-file" id="inp-file">
         <br>

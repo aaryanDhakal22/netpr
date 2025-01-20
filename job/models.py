@@ -1,10 +1,14 @@
 from django.db import models
 
 # Create your models here.
+
+def dynamic_save_path(instance,filename):
+    return f"uploads/{instance.title}/{filename}" 
+
 class FileModel(models.Model):
     title = models.CharField(max_length=50)
-    file = models.FileField()
-    ext = models.CharField(max_length=10)
+    file = models.FileField(upload_to=dynamic_save_path)
     created_on = models.DateTimeField(auto_now=True)
-    save_path = "../print_files/"+str(title)+str(ext)
     
+    def __str__(self):
+        return self.title
