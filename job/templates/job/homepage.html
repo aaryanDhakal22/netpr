@@ -6,14 +6,16 @@
     <title>NetPr</title>
 </head>
 <body>
-    This is a test
-    <form action="print/" method="post">
+    <form enctype="multipart/form-data" action="print/" method="post">
         {% csrf_token %}
         <label for="inp-title">Title : </label>
         <input type="text" id="inp-title">
         <br>
         <label for="inp-passwd">Password : </label>
         <input type="password" id="inp-passwd">
+        <br>
+        <input type="file" id="inp-file">
+        <br>
         <input type="submit" value="Print" id="inp-submit">
     </form>
 

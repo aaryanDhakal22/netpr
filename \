@@ -8,3 +8,7 @@ class FileModel(models.Model):
     created_on = models.DateTimeField(auto_now=True)
     save_path = "../print_files/"+str(title)+str(ext)
     
+    def saveFile(self):
+        with open(self.save_path, "wb+") as destination:
+            for chunk in f.chunks():
+                destination.write(chunk)
