@@ -1,6 +1,6 @@
-from django.shortcuts import render
+from django.shortcuts import render,Http404
 
-# Create your views here.
+#print_job Create your views here.
 def homepage(req):
     return render(req,"job/homepage.html")
 
@@ -10,5 +10,11 @@ def handle_upload(file):
 
 def upload_file(req):
     if req.method == "POST":
-        handle_upload(req.FILES["file"])
+        uploaded_file = req.FILES.get('inp-file',False)
+        if uploaded_file!= False:
+            handle_upload(uploaded_file)
+        else:
+            response = render(req, template_name)
+            response.status_code = 404
+            return response
         return render(req,"job/success.html")

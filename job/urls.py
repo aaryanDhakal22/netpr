@@ -1,7 +1,7 @@
 
 from django.urls import path
-from .views import homepage,print_job
+from .views import homepage, upload_file
 urlpatterns = [
     path('',homepage),
-    path('print/',print_job)
+    path('print/',upload_file)
 ]
