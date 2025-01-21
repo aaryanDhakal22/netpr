@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetPr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Trebuchet MS', sans-serif;
+            background-color:rgb(37, 37, 40);
+            color:#ffffff;
+          }
+        .bg-primary{
+            background-color:rgb(37, 37, 40);
+        }
+        .bg-secondary{
+            background-color:rgba(172, 148, 244,0.3)
+        }
+        .text-primary{
+            color:rgb(172 148 244);
+        }
+        .bg-button{
+            background-color:rgb(172 148 244);
+        }
+    </style>
+
+</head>
+<body class="h-screen">
+
+    {% block content %}
+    
+    {% endblock content %}
+</body>
+</html>

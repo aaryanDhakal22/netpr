@@ -1,7 +1,6 @@
 from django.shortcuts import render
 from .models import FileModel
 
-#print_job Create your views here.
 def homepage(req):
     return render(req,"job/homepage.html")
 
