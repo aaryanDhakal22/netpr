@@ -1,7 +1,5 @@
 
-\\
-\
-uploads/
+uploads
 # Django #
 *.log
 *.pot
