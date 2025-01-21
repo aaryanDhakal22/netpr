@@ -21,7 +21,7 @@ def upload_file(req):
         password = req.POST["password"]
         if password!="aaryan150":
             if uploaded_file!= False:
-                handle_upload(req.POST.get("inp-title","unknown"),uploaded_file)
+                handle_upload(title,uploaded_file)
             else:
                 response = render(req,'job/filenotfound.html')
                 response.status_code = 404
