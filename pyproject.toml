@@ -1,0 +1,10 @@
+[project]
+name = "netpr"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.1.6",
+    "gunicorn>=23.0.0",
+]
