@@ -1,0 +1,39 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#252528">
+  <title>NetPr</title>
+  <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+  <link rel="icon" type="image/png" href="{{asset "img/logo.png"}}">
+  <link rel="apple-touch-icon" href="{{asset "img/icon-192.png"}}">
+  <link rel="stylesheet" href="{{asset "css/app.css"}}">
+  <script src="{{asset "vendor/htmx.min.js"}}" defer></script>
+  <script type="module" src="{{asset "js/app.js"}}"></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'>
+  <header class="top">
+    <a class="brand" href="/"><img src="{{asset "img/logo.png"}}" alt="" width="34" height="34"><span>NetPr</span></a>
+    <nav class="nav">
+      <a href="/"{{if eq .Nav "print"}} aria-current="page"{{end}}>Print</a>
+      <a href="/jobs"{{if eq .Nav "history"}} aria-current="page"{{end}}>History</a>
+      <a href="/printer"{{if eq .Nav "printer"}} aria-current="page"{{end}}>Printer</a>
+    </nav>
+    <div id="printer-pill" hx-get="/printer/status" hx-trigger="every 30s, printer-changed from:body" hx-swap="innerHTML">{{template "printer-pill" .Printer}}</div>
+  </header>
+  {{if .DryRun}}<div class="banner banner--warn">Dry-run mode: jobs are recorded but not sent to the printer.</div>{{end}}
+  <main>{{template "content" .}}</main>
+  <footer class="foot">Signed in as {{.User}}</footer>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <dialog id="preview" class="preview">
+    <div class="preview-head">
+      <strong id="preview-title"></strong>
+      <button type="button" class="icon" data-close-preview aria-label="Close preview">&times;</button>
+    </div>
+    <div id="preview-pages" class="preview-pages"></div>
+  </dialog>
+</body>
+</html>{{end}}

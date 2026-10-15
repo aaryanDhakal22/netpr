@@ -1,0 +1,63 @@
+# netpr behind an existing Traefik + Authelia on the same Docker host.
+# Copy .env.example to .env, fill it in, then: docker compose up -d --build
+
+name: netpr
+
+services:
+  netpr:
+    build: .
+    image: netpr:local
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NETPR_GOTENBERG_URL: http://gotenberg:3000
+    volumes:
+      - netpr-data:/data
+    networks:
+      - traefik   # Traefik reaches netpr here; also the route out to the printer and Pushover
+      - internal  # Gotenberg only
+    depends_on:
+      - gotenberg
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # No published ports: the app is only reachable through Traefik, and the
+    # internal :9090 listener (/healthz, /readyz, /metrics) only on the networks.
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK}
+      traefik.http.routers.netpr.rule: Host(`${NETPR_HOST}`)
+      traefik.http.routers.netpr.entrypoints: ${TRAEFIK_ENTRYPOINT}
+      traefik.http.routers.netpr.tls.certresolver: ${TRAEFIK_CERTRESOLVER}
+      traefik.http.routers.netpr.middlewares: authelia@file
+      traefik.http.services.netpr.loadbalancer.server.port: "8080"
+
+  gotenberg:
+    image: gotenberg/gotenberg:8.37.0
+    restart: unless-stopped
+    command:
+      - gotenberg
+      - --api-timeout=120s
+      - --log-level=warn
+      - --libreoffice-auto-start=true
+      - --chromium-deny-private-ips=true
+    networks:
+      - internal
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK}
+  # No internet access: uploaded documents are converted without being able
+  # to fetch remote resources.
+  internal:
+    internal: true
+
+volumes:
+  netpr-data:

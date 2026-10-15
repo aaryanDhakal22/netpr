@@ -1,0 +1,41 @@
+{{define "content"}}
+<div class="page-head">
+  <h1>Printer</h1>
+  <p class="muted">Status, troubleshooting and settings.</p>
+</div>
+<div id="result" aria-live="polite"></div>
+
+{{template "diag" .Diag}}
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Printer queue</h2>
+  </div>
+  <p class="muted">Jobs the printer is still holding, from any device.</p>
+  <div id="queue" hx-get="/printer/queue" hx-trigger="load, every 10s, printer-changed from:body" hx-swap="innerHTML">
+    <p class="muted">Asking the printer…</p>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>Tools</h2></div>
+  <div class="actions">
+    <button type="button" hx-post="/printer/test-page" hx-target="#tool-result" hx-swap="innerHTML"
+            hx-confirm="Print one test page now?">Print test page</button>
+    <button type="button" hx-post="/printer/test-notify" hx-target="#tool-result" hx-swap="innerHTML">Send test notification</button>
+  </div>
+  <div id="tool-result" aria-live="polite"></div>
+</section>
+
+{{template "defaults" .Defaults}}
+
+{{template "address" .Address}}
+
+<section class="panel">
+  <details hx-get="/printer/attributes" hx-trigger="toggle once" hx-target="find .raw" hx-swap="innerHTML">
+    <summary><h2>Everything the printer reports</h2></summary>
+    <p class="muted">The raw IPP attributes, read-only. Useful when something looks wrong.</p>
+    <div class="raw"><p class="muted">Asking the printer…</p></div>
+  </details>
+</section>
+{{end}}

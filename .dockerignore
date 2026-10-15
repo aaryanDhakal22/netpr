@@ -1,2 +1,5 @@
-__pycache__
-
+.git
+.env
+*.md
+docs/
+compose.yaml

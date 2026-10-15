@@ -1,0 +1,49 @@
+{{define "content"}}
+<section class="composer">
+  <form id="upload-form" hx-post="/upload" hx-encoding="multipart/form-data" hx-trigger="change"
+        hx-target="#staged" hx-swap="beforeend" hx-indicator="#upload-progress">
+    <label class="drop" id="dropzone" for="file-input">
+      <input id="file-input" type="file" name="files" multiple accept="{{.Accept}}">
+      <span class="drop-title">Drop files to print</span>
+      <span class="drop-sub">or tap to choose · PDF, photos, Word, Excel, PowerPoint, text · up to {{.MaxUploadMB}} MB each</span>
+    </label>
+    <div id="upload-progress" class="progress htmx-indicator" aria-live="polite">
+      <span class="progress-bar"><span></span></span>
+      <span class="progress-label">Uploading and converting…</span>
+    </div>
+  </form>
+
+  <form id="print-form" hx-post="/print" hx-target="#result" hx-swap="innerHTML">
+    <ul id="staged" class="staged">{{range .Staged}}{{template "staged-item" .}}{{end}}</ul>
+    <fieldset class="options">
+      <legend class="sr-only">Print options</legend>
+      <label class="field">
+        <span>Copies</span>
+        <input type="number" name="copies" min="1" max="99" value="{{.Settings.Copies}}" inputmode="numeric" required>
+      </label>
+      <label class="field field--range">
+        <span>Pages</span>
+        <input type="text" name="range" placeholder="All" autocomplete="off" inputmode="numeric" pattern="[0-9 ,\-]*">
+      </label>
+      <label class="toggle">
+        <input type="checkbox" name="duplex" {{if not .Printer.Duplex}}disabled{{else if .Settings.Duplex}}checked{{end}}>
+        <span>Double-sided</span>
+      </label>
+      <div class="submit-row">
+        <span id="estimate" class="muted"></span>
+        <button type="submit" class="primary">Print</button>
+      </div>
+    </fieldset>
+  </form>
+  <div id="result" aria-live="polite"></div>
+</section>
+
+<section id="printer-card" hx-get="/printer/status?view=card" hx-trigger="every 30s" hx-swap="innerHTML">{{template "printer-card" .Printer}}</section>
+
+<section class="recent">
+  <div class="section-head"><h2>Recent</h2><a href="/jobs">All history</a></div>
+  <ul class="jobs">
+    {{range .Jobs}}{{template "job" .}}{{else}}<li class="empty">Nothing printed yet.</li>{{end}}
+  </ul>
+</section>
+{{end}}

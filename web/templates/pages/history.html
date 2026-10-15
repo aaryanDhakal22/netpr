@@ -1,0 +1,18 @@
+{{define "content"}}
+<section class="recent">
+  <div class="section-head"><h1>History</h1></div>
+  <ul class="jobs jobs--history">
+    {{range .Jobs}}
+    <li id="job-{{.ID}}" class="job job--{{.State}}">
+      <span class="state">{{stateLabel .State}}</span>
+      <div class="job-body">
+        <strong>{{.Filename}}</strong>
+        <span class="muted">{{stamp .CreatedAt}} · {{.User}} · {{kindLabel .Kind}} · {{plural .Pages "page"}}{{if gt .Copies 1}} × {{.Copies}}{{end}}{{if .Duplex}} · double-sided{{end}}{{with .PageRange}} · pages {{.}}{{end}} · ≈{{plural .Sheets "sheet"}}</span>
+        {{with .Message}}<span class="msg">{{.}}</span>{{end}}
+      </div>
+    </li>
+    {{else}}<li class="empty">Nothing printed yet.</li>{{end}}
+  </ul>
+  {{if .NextBefore}}<a class="button ghost" href="/jobs?before={{.NextBefore}}">Older</a>{{end}}
+</section>
+{{end}}

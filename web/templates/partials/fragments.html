@@ -1,0 +1,92 @@
+{{define "printer-pill"}}<span class="pill pill--{{.Tone}}"><span class="dot"></span>{{.Label}}</span>{{end}}
+
+{{define "printer-card"}}
+{{if or .Attention .Markers .Warnings (not .Reachable)}}
+<div class="printer-card printer-card--{{.Tone}}">
+  <div class="printer-card-head">
+    <h2>Printer</h2>
+    {{template "printer-pill" .}}
+  </div>
+  {{with .Model}}<p class="muted">{{.}}</p>{{end}}
+  {{range .Attention}}<p class="alert">{{.}}</p>{{end}}
+  {{range .Warnings}}<p class="warn">{{.}}</p>{{end}}
+  {{template "markers" .Markers}}
+  {{template "paper" .Paper}}
+  <p class="card-link"><a href="/printer">Troubleshoot</a></p>
+</div>
+{{end}}
+{{end}}
+
+{{define "paper"}}
+{{range .}}
+<div class="marker paper paper--{{.Tone}}">
+  <span class="marker-name">{{.Name}}{{with .Size}} <small class="muted">· {{.}}</small>{{end}}</span>
+  {{if .Bar}}<span class="bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{.Percent}}" aria-label="{{.Name}} paper"><span style="width: {{.Percent}}%"></span></span>{{end}}
+  <span class="marker-level">{{.Label}}</span>
+</div>
+{{end}}
+{{end}}
+
+{{define "markers"}}
+{{range .}}
+<div class="marker{{if .Low}} marker--low{{end}}">
+  <span class="marker-name" title="{{.Name}}">{{.Name}}</span>
+  {{if .Known}}
+  <span class="bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{.Level}}" aria-label="{{.Name}} level"><span style="width: {{.Level}}%"></span></span>
+  <span class="marker-level">{{.Level}}%</span>
+  {{else}}<span class="marker-level muted">level unknown</span>{{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "staged-item"}}
+{{if .Error}}
+<li class="card card--error">
+  <div class="card-body"><strong>{{.Filename}}</strong><span>{{.Error}}</span></div>
+  <button type="button" class="icon" data-dismiss aria-label="Dismiss">&times;</button>
+</li>
+{{else}}
+<li class="card" data-id="{{.ID}}" data-pages="{{.Pages}}">
+  <input type="hidden" name="id" value="{{.ID}}">
+  <button type="button" class="thumbs" data-preview="/staged/{{.ID}}/pdf" data-title="{{.Filename}}" aria-label="Preview {{.Filename}}"></button>
+  <div class="card-body"><strong>{{.Filename}}</strong><span>{{kindLabel .Kind}} · {{plural .Pages "page"}}</span></div>
+  <button type="button" class="icon" hx-delete="/staged/{{.ID}}" hx-target="closest li" hx-swap="delete" aria-label="Remove {{.Filename}}">&times;</button>
+</li>
+{{end}}
+{{end}}
+
+{{define "staged"}}{{range .}}{{template "staged-item" .}}{{end}}{{end}}
+
+{{define "confirm"}}
+<div class="notice notice--confirm">
+  <p>This will use about <strong>{{plural .Sheets "sheet"}}</strong> ({{plural .Pages "page"}}), more than the {{.Threshold}}-sheet check.</p>
+  <div class="actions">
+    <button type="button" class="primary" hx-post="/print" hx-include="#print-form" hx-vals='{"confirm": "1"}' hx-target="#result">Print anyway</button>
+    <button type="button" class="ghost" data-clear-result>Cancel</button>
+  </div>
+</div>
+{{end}}
+
+{{define "submitted"}}
+<ul id="staged" class="staged" hx-swap-oob="innerHTML"></ul>
+<div class="notice notice--ok">
+  <p>Sent {{plural (len .) "job"}} to the printer.</p>
+  <ul class="jobs">{{range .}}{{template "job" .}}{{end}}</ul>
+</div>
+{{end}}
+
+{{define "error"}}<div class="notice notice--error" role="alert">{{.}}</div>{{end}}
+
+{{define "job"}}
+<li id="job-{{.ID}}" class="job job--{{.State}}"{{if not (terminal .State)}} hx-get="/jobs/{{.ID}}" hx-trigger="every 2s" hx-swap="outerHTML"{{end}}>
+  <span class="state">{{stateLabel .State}}</span>
+  <div class="job-body">
+    <div class="job-title">
+      <strong>{{.Filename}}</strong>
+      {{if not (terminal .State)}}<span class="jobbar" role="progressbar" aria-label="{{stateLabel .State}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{progress .State}}"><span style="width: {{progress .State}}%"></span></span>{{end}}
+    </div>
+    <span class="muted">{{plural .Pages "page"}}{{if gt .Copies 1}} × {{.Copies}}{{end}}{{if .Duplex}} · double-sided{{end}}{{with .PageRange}} · pages {{.}}{{end}} · <time title="{{stamp .CreatedAt}}">{{ago .CreatedAt}}</time></span>
+    {{with .Message}}<span class="msg">{{.}}</span>{{end}}
+  </div>
+</li>
+{{end}}

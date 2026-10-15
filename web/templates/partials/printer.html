@@ -1,0 +1,162 @@
+{{define "diag"}}
+<section id="diag" class="panel panel--{{.Tone}}" hx-get="/printer/diag" hx-trigger="every 30s, printer-changed from:body" hx-swap="outerHTML">
+  <div class="panel-head">
+    <h2>Status</h2>
+    {{template "printer-pill" .}}
+  </div>
+  <dl class="facts">
+    <dt>Address</dt><dd><code>{{.URI}}</code></dd>
+    <dt>Model</dt><dd>{{or .Model "Unknown"}}</dd>
+    {{if .Reachable}}
+    <dt>State</dt><dd>{{.State}}{{if not .Accepting}} · <span class="no">not accepting jobs</span>{{end}}</dd>
+    {{with .Message}}<dt>Printer says</dt><dd>{{.}}</dd>{{end}}
+    <dt>Problems</dt>
+    <dd>{{range .Attention}}<span class="no">{{.}}</span><br>{{end}}{{range .Warnings}}<span class="warn">{{.}}</span><br>{{end}}{{if not (or .Attention .Warnings)}}None{{end}}</dd>
+    {{with .Reasons}}<dt>Raw reasons</dt><dd><code>{{join . ", "}}</code></dd>{{end}}
+    <dt>Sends as</dt><dd>{{if .SendsAs}}<span class="yes">{{.SendsAs}}</span>{{else}}<span class="no">Accepts neither PDF nor PWG Raster: jobs will be rejected</span>{{end}}</dd>
+    <dt>Double-sided</dt><dd>{{if .Duplex}}<span class="yes">Supported</span>{{else}}Not supported{{end}}</dd>
+    {{else if .Checked}}
+    <dt>Error</dt><dd class="no">{{.Error}}</dd>
+    {{end}}
+    <dt>Last checked</dt><dd>{{if .Checked}}{{ago .CheckedAt}}{{with .Latency}} · answered in {{.}}{{end}}{{else}}Not yet{{end}}</dd>
+    <dt>Converter</dt><dd>{{if .Gotenberg}}<span class="no">Gotenberg unavailable: {{.Gotenberg}}</span>{{else}}<span class="yes">Gotenberg OK</span>{{end}}</dd>
+    <dt>Alerts</dt><dd>{{if .Pushover}}Pushover on{{else}}<span class="muted">Pushover not set up</span>{{end}}</dd>
+    {{if .DryRun}}<dt>Mode</dt><dd class="warn">Dry run: nothing is sent to the printer</dd>{{end}}
+  </dl>
+  {{if and .Checked (not .Reachable)}}
+  <ul class="hints">
+    {{if .NeedsTLS}}<li>This printer only accepts encrypted IPP. Test its bare IP below: netpr will find the ipps:// address.</li>{{end}}
+    <li>Make sure the printer is switched on and connected to the network.</li>
+    <li>Compare the address above with the IP shown in the printer's own network menu. If it changed, set the new one below, and give the printer a DHCP reservation so it stays put.</li>
+    <li>A printer waking from deep sleep can miss the first request: press Check now.</li>
+  </ul>
+  {{end}}
+  {{template "markers" .Markers}}
+  {{template "paper" .Paper}}
+  <div class="actions">
+    <button type="button" hx-post="/printer/check" hx-target="#diag" hx-swap="outerHTML">Check now</button>
+  </div>
+</section>
+{{end}}
+
+{{define "queue"}}
+{{with .Note}}<p class="notice">{{.}}</p>{{end}}
+{{if .Error}}<p class="no">{{.Error}}</p>
+{{else}}
+<ul class="jobs">
+  {{range .Jobs}}
+  <li class="job job--{{.State}}">
+    <span class="state">{{stateLabel .State}}</span>
+    <div class="job-body">
+      <strong>{{or .Name "Untitled"}}</strong>
+      <span class="muted">Job {{.ID}}{{with .User}} · {{.}}{{end}}{{with .Reasons}} · {{join . ", "}}{{end}}</span>
+    </div>
+    <button type="button" class="ghost" hx-post="/printer/queue/{{.ID}}/cancel" hx-target="#queue" hx-swap="innerHTML"
+            hx-confirm="Cancel job {{.ID}} ({{or .Name "Untitled"}}) on the printer?">Cancel</button>
+  </li>
+  {{else}}<li class="empty">Nothing waiting.</li>{{end}}
+</ul>
+{{end}}
+{{end}}
+
+{{define "attributes"}}
+{{if .Error}}<p class="no">{{.Error}}</p>
+{{else}}<dl class="raw-attrs">{{range .Attrs}}<dt>{{.Name}}</dt><dd>{{.Value}}</dd>{{end}}</dl>{{end}}
+{{end}}
+
+{{define "tool-result"}}
+<div class="notice notice--{{.Tone}}">
+  <p>{{.Text}}</p>
+  {{with .Jobs}}<ul class="jobs">{{range .}}{{template "job" .}}{{end}}</ul>{{end}}
+</div>
+{{end}}
+
+{{define "defaults"}}
+<form id="defaults" class="panel" hx-post="/printer/defaults" hx-target="this" hx-swap="outerHTML">
+  <div class="panel-head"><h2>Print defaults</h2></div>
+  <p class="muted">Saved here, these override the values in .env.</p>
+  <div class="settings-grid">
+    <label class="field">
+      <span>Copies{{if index .Changed "default_copies"}} <em class="badge">changed</em>{{end}}</span>
+      <input type="number" name="copies" min="1" max="99" value="{{.Values.Copies}}" inputmode="numeric" required>
+      <small>.env: {{.Env.Copies}}</small>
+    </label>
+    <label class="field">
+      <span>Paper size for photos{{if index .Changed "paper_size"}} <em class="badge">changed</em>{{end}}</span>
+      <select name="paper_size">
+        <option value="letter"{{if eq .Values.PaperSize "letter"}} selected{{end}}>Letter</option>
+        <option value="a4"{{if eq .Values.PaperSize "a4"}} selected{{end}}>A4</option>
+      </select>
+      <small>.env: {{.Env.PaperSize}}</small>
+    </label>
+    <label class="field">
+      <span>Ask before jobs over (sheets){{if index .Changed "confirm_sheets"}} <em class="badge">changed</em>{{end}}</span>
+      <input type="number" name="confirm_sheets" min="0" max="10000" value="{{.Values.ConfirmSheets}}" inputmode="numeric" required>
+      <small>0 turns the check off · .env: {{.Env.ConfirmSheets}}</small>
+    </label>
+    <label class="field">
+      <span>Toner alert below (%){{if index .Changed "toner_low_pct"}} <em class="badge">changed</em>{{end}}</span>
+      <input type="number" name="toner_low_pct" min="0" max="100" value="{{.Values.TonerLowPct}}" inputmode="numeric" required>
+      <small>.env: {{.Env.TonerLowPct}}</small>
+    </label>
+    <label class="toggle">
+      <input type="checkbox" name="duplex"{{if .Values.Duplex}} checked{{end}}>
+      <span>Double-sided by default{{if index .Changed "default_duplex"}} <em class="badge">changed</em>{{end}}</span>
+    </label>
+  </div>
+  {{with .Error}}<div class="notice notice--error" role="alert">{{.}}</div>{{end}}
+  {{with .Saved}}<div class="notice notice--ok">{{.}}</div>{{end}}
+  <div class="actions">
+    <button type="submit" class="primary">Save</button>
+    {{if .AnyChanged}}<button type="button" class="ghost" hx-post="/printer/defaults/reset" hx-target="#defaults" hx-swap="outerHTML"
+            hx-confirm="Put every print default back to its .env value?">Reset to .env</button>{{end}}
+  </div>
+</form>
+{{end}}
+
+{{define "address"}}
+<section id="address" class="panel">
+  <div class="panel-head"><h2>Printer address</h2></div>
+  <p>Printing to <code>{{.URI}}</code>{{if .Changed}} <em class="badge">changed</em>{{end}}</p>
+  {{if .Changed}}<p class="muted">.env: <code>{{.EnvURI}}</code></p>{{end}}
+  {{with .Error}}<div class="notice notice--error" role="alert">{{.}}</div>{{end}}
+  {{with .Saved}}<div class="notice notice--ok">{{.}}</div>{{end}}
+  <form class="inline-form" hx-post="/printer/address/test" hx-target="#probe" hx-swap="innerHTML">
+    <label class="field">
+      <span>New IP address or ipp:// URI</span>
+      <input type="text" name="address" value="{{.Input}}" placeholder="192.168.1.50" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+    </label>
+    <button type="submit">Test</button>
+  </form>
+  <p class="muted">Testing only reads the printer's status. Nothing changes until you choose to use it.</p>
+  <div id="probe" aria-live="polite"></div>
+  {{if .Changed}}
+  <div class="actions">
+    <button type="button" class="ghost" hx-post="/printer/address/reset" hx-target="#address" hx-swap="outerHTML"
+            hx-confirm="Switch back to {{.EnvURI}}?">Use the .env address</button>
+  </div>
+  {{end}}
+</section>
+{{end}}
+
+{{define "probe"}}
+{{if not .Status.Reachable}}
+<div class="notice notice--error" role="alert">{{.Error}}</div>
+{{else}}
+<div class="notice notice--ok">
+  <p><strong>{{or .Status.MakeModel "A printer"}}</strong> answered at <code>{{.URI}}</code> in {{.Latency}}.</p>
+  <ul class="checks">
+    <li>{{with .Status.SendsAs}}<span class="yes">netpr will send: {{.}}</span>{{else}}<span class="no">Accepts neither PDF nor PWG Raster: jobs will be rejected</span>{{end}}</li>
+    <li>{{if .Status.SupportsDuplex}}<span class="yes">Double-sided</span>{{else}}Single-sided only{{end}}</li>
+    <li>State: {{.Status.State}}</li>
+  </ul>
+  {{if .Current}}<p class="muted">This is the printer already in use.</p>
+  {{else}}
+  <form hx-post="/printer/address" hx-target="#address" hx-swap="outerHTML">
+    <input type="hidden" name="uri" value="{{.URI}}">
+    <button type="submit" class="primary">Use this printer</button>
+  </form>
+  {{end}}
+</div>
+{{end}}
+{{end}}
