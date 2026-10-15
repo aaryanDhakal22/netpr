@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -44,20 +45,55 @@ type Options struct {
 	Media  Media
 	Duplex bool
 	Tumble bool // duplex flips on the short edge
+
+	// Copies repeats the whole document, collated, inside the raster stream,
+	// for printers that ignore the IPP copies attribute for raster jobs.
+	// 0 or 1 means one copy. TempDir holds the rendered pages meanwhile.
+	Copies  int
+	TempDir string
 }
 
-// Convert renders every page of the PDF at src as 8-bit grayscale PWG Raster.
+// Convert renders every page of the PDF at src as 8-bit grayscale PWG Raster
+// and returns the number of pages rendered (per copy).
 func Convert(ctx context.Context, src string, dst io.Writer, o Options) (pages int, err error) {
 	sizes, err := pageSizes(ctx, src)
 	if err != nil {
 		return 0, err
 	}
-	w := bufio.NewWriterSize(dst, 256<<10)
-	w.WriteString("RaS2")
+	n, copies := len(sizes), max(1, o.Copies)
+	// Each copy starts on a fresh sheet: when double-sided with an odd page
+	// count, a blank back side goes between copies.
+	blanks := 0
+	if o.Duplex && n%2 == 1 {
+		blanks = copies - 1
+	}
 
 	dpi := float64(o.DPI)
 	cw := int(math.Round(o.Media.Width / 72 * dpi))
 	ch := int(math.Round(o.Media.Height / 72 * dpi))
+	hdr := header{
+		width: cw, height: ch, dpi: o.DPI, media: o.Media, duplex: o.Duplex, tumble: o.Tumble,
+		totalPages: n*copies + blanks,
+	}.encode()
+
+	// One copy streams straight out; several are rendered once into a spool
+	// file and then repeated.
+	out := dst
+	var spool *os.File
+	if copies > 1 {
+		if spool, err = os.CreateTemp(o.TempDir, "pages-*.pwg"); err != nil {
+			return 0, err
+		}
+		defer func() {
+			spool.Close()
+			os.Remove(spool.Name())
+		}()
+		out = spool
+	}
+	w := bufio.NewWriterSize(out, 256<<10)
+	if copies == 1 {
+		w.WriteString("RaS2")
+	}
 	canvas := newGray(cw, ch)
 	for i, sz := range sizes {
 		pw, ph := sz[0], sz[1]
@@ -76,15 +112,36 @@ func Convert(ctx context.Context, src string, dst io.Writer, o Options) (pages i
 		}
 		canvas.fill(0xff)
 		canvas.drawCentered(img)
-
-		h := header{
-			width: cw, height: ch, dpi: o.DPI, media: o.Media, duplex: o.Duplex, tumble: o.Tumble,
-			totalPages: len(sizes),
-		}
-		w.Write(h.encode())
+		w.Write(hdr)
 		encodeImage(w, canvas)
 	}
-	return len(sizes), w.Flush()
+	if err := w.Flush(); err != nil || copies == 1 {
+		return n, err
+	}
+
+	size, err := spool.Seek(0, io.SeekEnd)
+	if err != nil {
+		return n, err
+	}
+	var blank bytes.Buffer
+	if blanks > 0 {
+		canvas.fill(0xff)
+		bw := bufio.NewWriter(&blank)
+		bw.Write(hdr)
+		encodeImage(bw, canvas)
+		bw.Flush()
+	}
+	w = bufio.NewWriterSize(dst, 256<<10)
+	w.WriteString("RaS2")
+	for c := range copies {
+		if c > 0 && blanks > 0 {
+			w.Write(blank.Bytes())
+		}
+		if _, err := io.Copy(w, io.NewSectionReader(spool, 0, size)); err != nil {
+			return n, err
+		}
+	}
+	return n, w.Flush()
 }
 
 var (

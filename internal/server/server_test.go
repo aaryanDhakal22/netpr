@@ -566,6 +566,14 @@ func TestPrintsRasterWhenPrinterLacksPDF(t *testing.T) {
 	if !bytes.Contains(req, []byte("two-sided-long-edge")) {
 		t.Error("sides not sent")
 	}
+	// The printer ignores IPP copies for raster, so the copies are in the
+	// document: page, blank back, page. The attribute itself is left out.
+	if got := bytes.Count(req[i:], []byte("PwgRaster")); got != 3 {
+		t.Errorf("%d raster pages, want 3 (2 copies of 1 page, blank back between)", got)
+	}
+	if bytes.Contains(req[:i], []byte("copies")) {
+		t.Error("copies attribute sent as well as copies in the document")
+	}
 }
 
 func TestJobFinishedToast(t *testing.T) {

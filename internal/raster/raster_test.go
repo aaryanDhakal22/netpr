@@ -251,3 +251,98 @@ func TestConvertTestPage(t *testing.T) {
 		os.WriteFile(out, buf.Bytes(), 0o644)
 	}
 }
+
+// pdfPages writes an n-page letter PDF; page k has a black square k inches
+// down the left edge, so pages can be told apart after rendering.
+func pdfPages(t *testing.T, n int) string {
+	t.Helper()
+	objs := []string{"<< /Type /Catalog /Pages 2 0 R >>", ""}
+	var kids []string
+	for k := range n {
+		content := fmt.Sprintf("0 g 0 %d 72 72 re f\n", 792-72*(k+1))
+		objs = append(objs, fmt.Sprintf("<< /Length %d >>\nstream\n%sendstream", len(content), content))
+		objs = append(objs, fmt.Sprintf("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents %d 0 R >>", len(objs)))
+		kids = append(kids, fmt.Sprintf("%d 0 R", len(objs)))
+	}
+	objs[1] = fmt.Sprintf("<< /Type /Pages /Kids [%s] /Count %d >>", strings.Join(kids, " "), n)
+	var b bytes.Buffer
+	b.WriteString("%PDF-1.4\n")
+	var offs []int
+	for i, o := range objs {
+		offs = append(offs, b.Len())
+		fmt.Fprintf(&b, "%d 0 obj\n%s\nendobj\n", i+1, o)
+	}
+	x := b.Len()
+	fmt.Fprintf(&b, "xref\n0 %d\n0000000000 65535 f \n", len(objs)+1)
+	for _, o := range offs {
+		fmt.Fprintf(&b, "%010d 00000 n \n", o)
+	}
+	fmt.Fprintf(&b, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(objs)+1, x)
+	path := filepath.Join(t.TempDir(), "pages.pdf")
+	os.WriteFile(path, b.Bytes(), 0o600)
+	return path
+}
+
+// pageMark returns which page a rendered image is (1-based, from its square),
+// or 0 for a blank page.
+func pageMark(img *gray, dpi int) int {
+	for k := 1; k <= 10; k++ {
+		if dark(img, dpi/4, dpi*(k-1)+dpi/2) {
+			return k
+		}
+	}
+	return 0
+}
+
+func TestConvertCopies(t *testing.T) {
+	needPoppler(t)
+	cases := []struct {
+		name   string
+		pages  int
+		duplex bool
+		want   []int // page marks in stream order; 0 = blank
+	}{
+		{"odd pages double-sided: blank back between copies", 3, true, []int{1, 2, 3, 0, 1, 2, 3}},
+		{"odd pages single-sided: no blanks", 3, false, []int{1, 2, 3, 1, 2, 3}},
+		{"one page double-sided", 1, true, []int{1, 0, 1}},
+		{"even pages double-sided", 2, true, []int{1, 2, 1, 2}},
+	}
+	for _, c := range cases {
+		var buf bytes.Buffer
+		n, err := Convert(context.Background(), pdfPages(t, c.pages), &buf,
+			Options{DPI: 50, Media: Letter, Duplex: c.duplex, Copies: 2, TempDir: t.TempDir()})
+		if err != nil || n != c.pages {
+			t.Fatalf("%s: n=%d err=%v", c.name, n, err)
+		}
+		pages, err := decode(buf.Bytes())
+		if err != nil {
+			t.Fatalf("%s: decode: %v", c.name, err)
+		}
+		var got []int
+		for _, p := range pages {
+			got = append(got, pageMark(p.img, 50))
+			if int(p.u32(452)) != len(c.want) {
+				t.Errorf("%s: TotalPageCount = %d, want %d", c.name, p.u32(452), len(c.want))
+			}
+		}
+		if fmt.Sprint(got) != fmt.Sprint(c.want) {
+			t.Errorf("%s: pages %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestConvertRemovesSpool(t *testing.T) {
+	needPoppler(t)
+	dir := t.TempDir()
+	var buf bytes.Buffer
+	if _, err := Convert(context.Background(), pdfPages(t, 2), &buf, Options{DPI: 50, Media: Letter, Copies: 3, TempDir: dir}); err != nil {
+		t.Fatal(err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Errorf("spool file left behind: %v", entries)
+	}
+	pages, _ := decode(buf.Bytes())
+	if len(pages) != 6 {
+		t.Errorf("3 copies of 2 pages = %d pages", len(pages))
+	}
+}

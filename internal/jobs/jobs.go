@@ -246,7 +246,7 @@ func (s *Service) send(ctx context.Context, t task) {
 	}
 
 	pc := s.Printer.Get()
-	path, format, err := s.document(ctx, pc, t.item.Dir, path, j.Duplex)
+	path, format, err := s.document(ctx, pc, t.item.Dir, path, j.Duplex, j.Copies)
 	if err != nil {
 		log.Error("rasterize", "err", err)
 		s.finish(ctx, j, store.StateFailed, "could not prepare the pages for the printer")
@@ -274,6 +274,9 @@ func (s *Service) send(ctx context.Context, t task) {
 	opts := printer.PrintOptions{
 		JobName: j.Filename, User: j.User, Format: format, Copies: j.Copies, Sides: s.sides(j.Duplex),
 	}
+	if format == printer.FormatPWGRaster {
+		opts.Copies = 1 // the copies are already in the document; see document
+	}
 	sendCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	ippID, err := pc.Print(sendCtx, f, int(st.Size()), opts)
 	cancel()
@@ -291,7 +294,9 @@ func (s *Service) send(ctx context.Context, t task) {
 
 // document decides what to send: the PDF itself, or the pages rendered as
 // PWG Raster for printers that can't print PDF (many AirPrint-only models).
-func (s *Service) document(ctx context.Context, pc *printer.Client, dir, pdfPath string, duplex bool) (string, string, error) {
+// Raster output already contains every copy, because printers such as the
+// Canon LBP246dw ignore the IPP copies attribute for raster jobs.
+func (s *Service) document(ctx context.Context, pc *printer.Client, dir, pdfPath string, duplex bool, copies int) (string, string, error) {
 	st := s.Monitor.Status()
 	if st.URI != pc.URI() || !st.Reachable {
 		st = s.Monitor.Refresh(ctx)
@@ -314,6 +319,7 @@ func (s *Service) document(ctx context.Context, pc *printer.Client, dir, pdfPath
 	start := time.Now()
 	pages, err := raster.Convert(ctx, pdfPath, f, raster.Options{
 		DPI: st.RasterDPI(), Media: raster.MediaFor(s.Converter.PaperSize()), Duplex: duplex,
+		Copies: copies, TempDir: dir,
 	})
 	if err != nil {
 		return "", "", err
@@ -321,7 +327,7 @@ func (s *Service) document(ctx context.Context, pc *printer.Client, dir, pdfPath
 	if err := f.Close(); err != nil {
 		return "", "", err
 	}
-	s.Log.Info("rendered pages for the printer", "pages", pages, "dpi", st.RasterDPI(),
+	s.Log.Info("rendered pages for the printer", "pages", pages, "copies", copies, "dpi", st.RasterDPI(),
 		"seconds", time.Since(start).Round(10*time.Millisecond).Seconds())
 	return out, printer.FormatPWGRaster, nil
 }
